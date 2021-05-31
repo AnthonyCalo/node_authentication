@@ -6,6 +6,8 @@ const mongoose = require("mongoose");
 //const encrypt = require("mongoose-encryption");
 const alert = require("alert");
 const md5 = require("md5");
+const bcrypt = require("bcrypt");
+
 
 
 const app = express();
@@ -16,7 +18,7 @@ app.use(express.urlencoded({extended: true}));
 
 mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true, useUnifiedTopology: true});
 
-console.log(process.env.SECRET);
+const saltRounds = 10;
 
 const userSchema = new mongoose.Schema({
     email: String,
@@ -39,7 +41,7 @@ app.route("/login")
     })
     .post(function(req, res){
         let enteredPass = req.body.password;
-        if(req.body.password===""){
+        if(enteredPass===""){
             console.log("true");
             alert("Don't leave fields blank!");
             res.redirect("/login");
@@ -47,13 +49,16 @@ app.route("/login")
         }else{
         User.findOne({email: req.body.username}, function(err, foundUser){
             if(!err){
-                if(foundUser.password===md5(enteredPass)){
-                    console.log("Signed in succesfully")
-                    res.render("secrets");
-                }
-                else{
-                    res.send("wrong password Dumb Dumb");
-                }
+                bcrypt.compare(enteredPass, foundUser.password, function(err, results){
+                    if(results===true){
+                        console.log("Signed in succesfully")
+                        res.render("secrets");
+                    }else{
+                        res.redirect("/login");
+                    }
+                })
+                
+              
             }
         })
         }
@@ -67,19 +72,26 @@ app.route("/register")
     .post(function(req, res){
         const email = req.body.username;
         const pass = req.body.password;
-        let newUser = new User({
-            email: email,
-            password: md5(pass)
+        //bcrypt salt. copied from documentation
+        bcrypt.hash(pass, saltRounds, function(err, hash){
+            //Store hashi in your password DB
+            let newUser = new User({
+                email: email,
+                password: hash
+            });
+            newUser.save(function(err){
+                if(!err){
+                console.log("User registered");
+                res.render("secrets");
+                }else{
+                    console.log("There was an error registering: "+ err);
+                    res.redirect('/');
+                }
+            });
         });
-        newUser.save(function(err){
-            if(!err){
-            console.log("User registered");
-            res.render("secrets")
-            }else{
-                console.log("There was an error registering: "+ err);
-                res.redirect('/');
-            }
-        });
+
+
+        
     })
 
 
