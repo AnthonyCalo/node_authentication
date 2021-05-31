@@ -5,7 +5,7 @@ const ejs = require("ejs");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
 const alert = require("alert");
-//var popup = require('popups');
+
 
 
 const app = express();
@@ -40,8 +40,8 @@ app.route("/login")
     .post(function(req, res){
         if(req.body.password===""){
             console.log("true");
-            alert("Don't leave shit blank dummy!");
-            //res.send("asshole");
+            alert("Don't leave fields blank!");
+            res.redirect("/login");
             
         }else{
         User.findOne({email: req.body.username}, function(err, foundUser){
@@ -51,7 +51,7 @@ app.route("/login")
                     res.render("secrets");
                 }
                 else{
-                    res.send("wrong password asshole");
+                    res.send("wrong password Dumb Dumb");
                 }
             }
         })
@@ -80,7 +80,6 @@ app.route("/register")
             }
         });
     })
-
 
 
 
