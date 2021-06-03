@@ -3,11 +3,10 @@ require("dotenv").config();
 const express= require('express');
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-//const encrypt = require("mongoose-encryption");
 const alert = require("alert");
-const md5 = require("md5");
-const bcrypt = require("bcrypt");
-
+const session = require('express-session');
+const passport = require('passport');
+const passportLocalMongoose = require('passport-local-mongoose');
 
 
 const app = express();
@@ -16,20 +15,37 @@ app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.use(express.urlencoded({extended: true}));
 
-mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true, useUnifiedTopology: true});
+//would use environment variables for secret if in production environment
+app.use(session({
+    secret: "I'm built different.",
+    resave: false,
+    saveUninitialized: true
+}));
 
-const saltRounds = 10;
+//middle ware required to initialize passport
+app.use(passport.initialize());
+//session is required to have a persisent login sesion
+app.use(passport.session());
+
+//connect to userDB
+mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true, useUnifiedTopology: true});
+mongoose.set("useCreateIndex", true);
+
 
 const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
 
-//userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ["password"] });
-////Encrypts when you call save()
-//decrypts when called find()
+userSchema.plugin(passportLocalMongoose);
 
 const User = new mongoose.model("User", userSchema);
+
+//Simplified passport/ passport-local configuration. copied from passport-local-mongoose documentation @ npmjs.com 
+passport.use(User.createStrategy());
+
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.get('/', function(req, res){
     res.render("home");
@@ -40,28 +56,20 @@ app.route("/login")
     res.render("login");
     })
     .post(function(req, res){
-        let enteredPass = req.body.password;
-        if(enteredPass===""){
-            console.log("true");
-            alert("Don't leave fields blank!");
-            res.redirect("/login");
-            
-        }else{
-        User.findOne({email: req.body.username}, function(err, foundUser){
-            if(!err){
-                bcrypt.compare(enteredPass, foundUser.password, function(err, results){
-                    if(results===true){
-                        console.log("Signed in succesfully")
-                        res.render("secrets");
-                    }else{
-                        res.redirect("/login");
-                    }
+        const user = new User({
+            username: req.body.username,
+            password: req.body.password
+        });
+        //req.login method comes from passport
+        req.login(user, function(err){
+            if(err){
+                console.log(err);
+            }else{
+                passport.authenticate("local")(req, res, function(){
+                    res.redirect("/secrets");                    
                 })
-                
-              
             }
-        })
-        }
+        });
     })
 
 
@@ -70,30 +78,32 @@ app.route("/register")
     res.render("register");
     })
     .post(function(req, res){
-        const email = req.body.username;
-        const pass = req.body.password;
-        //bcrypt salt. copied from documentation
-        bcrypt.hash(pass, saltRounds, function(err, hash){
-            //Store hashi in your password DB
-            let newUser = new User({
-                email: email,
-                password: hash
-            });
-            newUser.save(function(err){
-                if(!err){
-                console.log("User registered");
-                res.render("secrets");
-                }else{
-                    console.log("There was an error registering: "+ err);
-                    res.redirect('/');
-                }
-            });
-        });
+        User.register({username: req.body.username}, req.body.password, function(err, user){
+            if(!err){
+                passport.authenticate("local")(req, res, function(){
+                    res.redirect("/secrets");                    
+                })
+            }else{
+                console.log(err);
+                res.redirect("/login");
+            }
+        })
 
-
-        
     })
 
+app.get("/secrets", function(req, res){
+    if(req.isAuthenticated()){
+        res.render("secrets")
+    }else{
+        res.redirect("/login");
+    }
+});
+
+app.get("/logout", function(req, res){
+    //all thats needed to logout is .logout method from passport
+    req.logout();
+    res.redirect("/");
+})
 
 
 
