@@ -39,7 +39,7 @@ passport.use(new GoogleStrategy({
   },
   //accessToken is what lets me get data of user from google. profile contains the info. 
   function(accessToken, refreshToken, profile, cb) {
-    //console.log("HER!!!: " + profile.id);
+    //console.log("HERE!!!: " + profile.id);
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
     });
@@ -54,7 +54,8 @@ mongoose.set("useCreateIndex", true);
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    secret: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -133,7 +134,11 @@ app.get("/auth/google/secrets",
 
 app.get("/secrets", function(req, res){
     if(req.isAuthenticated()){
-        res.render("secrets")
+        User.find({"secret": {$ne: null}}, function(err, secrets){
+            if(!err){
+                res.render("secrets", {userWithSecrets: secrets});  
+            }
+        })
     }else{
         res.redirect("/login");
     }
@@ -145,6 +150,27 @@ app.get("/logout", function(req, res){
     res.redirect("/");
 })
 
+app.route("/submit")
+    .get(function(req, res){
+    if(req.isAuthenticated()){
+        res.render("submit");
+    }else{
+        res.redirect("/login");
+    }
+    })
+    .post(function(req, res){
+        const subSecret = req.body.secret;
+        console.log(req.user.id);
+        User.findById(req.user.id, function(err, foundUser){
+            if(!err){
+                foundUser.secret= subSecret;
+                foundUser.save();
+                res.redirect("/secrets");
+            }else{
+                console.log("error: " + err);
+            }
+        })
+    })
 
 
 
